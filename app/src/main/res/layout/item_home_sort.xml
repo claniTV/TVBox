@@ -16,9 +16,9 @@
         android:layout_height="wrap_content"
         android:layout_gravity="center"
         android:focusable="false"
-        android:gravity="center"
+        android:gravity="fill_horizontal"
         android:textColor="@color/color_BBFFFFFF"
-        android:textSize="@dimen/ts_30" />
+        android:textSize="@dimen/ts_40" />
 
     <ImageView
         android:id="@+id/tvFilter"
