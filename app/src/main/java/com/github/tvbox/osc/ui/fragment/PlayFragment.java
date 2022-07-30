@@ -177,9 +177,9 @@ public class PlayFragment extends BaseLazyFragment {
             }
 
             @Override
-            public void replay() {
+            public void replay(boolean replay) {
                 autoRetryCount = 0;
-                play();
+                play(replay);
             }
 
             @Override
@@ -191,10 +191,15 @@ public class PlayFragment extends BaseLazyFragment {
     }
 
     void setTip(String msg, boolean loading, boolean err) {
-        mPlayLoadTip.setText(msg);
-        mPlayLoadTip.setVisibility(View.VISIBLE);
-        mPlayLoading.setVisibility(loading ? View.VISIBLE : View.GONE);
-        mPlayLoadErr.setVisibility(err ? View.VISIBLE : View.GONE);
+        requireActivity().runOnUiThread(new Runnable() { //影魔
+            @Override
+            public void run() {
+                mPlayLoadTip.setText(msg);
+                mPlayLoadTip.setVisibility(View.VISIBLE);
+                mPlayLoading.setVisibility(loading ? View.VISIBLE : View.GONE);
+                mPlayLoadErr.setVisibility(err ? View.VISIBLE : View.GONE);
+            }
+        });
     }
 
     void hideTip() {
@@ -317,7 +322,7 @@ public class PlayFragment extends BaseLazyFragment {
         sourceKey = bundle.getString("sourceKey");
         sourceBean = ApiConfig.get().getSource(sourceKey);
         initPlayerCfg();
-        play();
+        play(false);
     }
 
     private void initData() {
@@ -435,7 +440,7 @@ public class PlayFragment extends BaseLazyFragment {
             return;
         }
         mVodInfo.playIndex++;
-        play();
+        play(false);
     }
 
     private void playPrevious() {
@@ -450,7 +455,7 @@ public class PlayFragment extends BaseLazyFragment {
             return;
         }
         mVodInfo.playIndex--;
-        play();
+        play(false);
     }
 
     private int autoRetryCount = 0;
@@ -458,7 +463,7 @@ public class PlayFragment extends BaseLazyFragment {
     boolean autoRetry() {
         if (autoRetryCount < 3) {
             autoRetryCount++;
-            play();
+            play(false);
             return true;
         } else {
             autoRetryCount = 0;
@@ -466,7 +471,7 @@ public class PlayFragment extends BaseLazyFragment {
         }
     }
 
-    public void play() {
+    public void play(boolean reset) {
         VodInfo.VodSeries vs = mVodInfo.seriesMap.get(mVodInfo.playFlag).get(mVodInfo.playIndex);
         EventBus.getDefault().post(new RefreshEvent(RefreshEvent.TYPE_REFRESH, mVodInfo.playIndex));
         setTip("正在获取播放信息", true, false);
@@ -475,6 +480,10 @@ public class PlayFragment extends BaseLazyFragment {
 
         playUrl(null, null);
         String progressKey = mVodInfo.sourceKey + mVodInfo.id + mVodInfo.playFlag + mVodInfo.playIndex;
+        //存储播放进度
+        Object bodyKey=CacheManager.getCache(MD5.string2MD5(progressKey));
+        //重新播放清除现有进度
+        if (reset) CacheManager.delete(MD5.string2MD5(progressKey), 0);
         if (Thunder.play(vs.url, new Thunder.ThunderCallback() {
             @Override
             public void status(int code, String info) {
@@ -498,6 +507,8 @@ public class PlayFragment extends BaseLazyFragment {
             return;
         }
         sourceViewModel.getPlay(sourceKey, mVodInfo.playFlag, progressKey, vs.url);
+        //执行重新播放后还原之前的进度
+//        if (reset) CacheManager.save(MD5.string2MD5(progressKey),bodyKey);
     }
 
     private String playSubtitle;
@@ -538,10 +549,16 @@ public class PlayFragment extends BaseLazyFragment {
 
     JSONObject jsonParse(String input, String json) throws JSONException {
         JSONObject jsonPlayData = new JSONObject(json);
-        String url = jsonPlayData.getString("url");
+        //小窗版解析方法改到这了  之前那个位置data解析无效
+        String url;
+        if (jsonPlayData.has("data")) {
+            url = jsonPlayData.getJSONObject("data").getString("url");
+        } else {
+            url = jsonPlayData.getString("url");
+        }
         String msg = jsonPlayData.optString("msg", "");
         if (url.startsWith("//")) {
-            url = "https:" + url;
+            url = "http:" + url;
         }
         if (!url.startsWith("http")) {
             return null;
